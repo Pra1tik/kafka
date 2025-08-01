@@ -16,23 +16,34 @@ func main() {
 		os.Exit(1)
 	}
 
-	client, err := l.Accept()
+	conn, err := l.Accept()
 	if err != nil {
 		fmt.Println("Error accepting connection: ", err.Error())
 		os.Exit(1)
 	}
 
+	handleRequest(conn)
+}
+
+func handleRequest(conn net.Conn) {
+	buffer := make([]byte, 1024)
+
+	_, err := conn.Read(buffer)
+	if err != nil {
+		fmt.Println("Error reading from connection: ", err.Error())
+	}
+
+	// Prepare payload
 	messageSize := uint32(0)
 	correlationID := uint32(7)
 
 	var buf bytes.Buffer
-
 	binary.Write(&buf, binary.BigEndian, messageSize)
 	binary.Write(&buf, binary.BigEndian, correlationID)
 
 	fmt.Println(buf.Bytes())
 
-	_, err = client.Write(buf.Bytes())
+	_, err = conn.Write(buf.Bytes())
 	if err != nil {
 		fmt.Println("Error sending payload: ", err.Error())
 		os.Exit(1)
