@@ -16,13 +16,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	conn, err := l.Accept()
-	if err != nil {
-		fmt.Println("Error accepting connection: ", err.Error())
-		os.Exit(1)
-	}
+	for {
+		conn, err := l.Accept()
+		if err != nil {
+			fmt.Println("Error accepting connection: ", err.Error())
+			os.Exit(1)
+		}
 
-	handleRequest(conn)
+		go handleRequest(conn)
+	}
 }
 
 func handleRequest(conn net.Conn) {
@@ -35,7 +37,10 @@ func handleRequest(conn net.Conn) {
 
 	// Prepare payload
 	messageSize := uint32(0)
-	correlationID := uint32(7)
+	correlationID := binary.BigEndian.Uint32(buffer[8:12])
+
+	// fmt.Println(buffer)
+	fmt.Println(correlationID)
 
 	var buf bytes.Buffer
 	binary.Write(&buf, binary.BigEndian, messageSize)
