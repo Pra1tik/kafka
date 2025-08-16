@@ -25,10 +25,10 @@ func (rh *ResponseHeaderV0) Write(w io.Writer) error {
 }
 
 type APIVersionsResponseV4 struct {
-	ErrorCode    int16
-	ApiVersions  []APIVersion
-	ThrottleTime int32
-	TagBuffer    types.TaggedFields
+	ErrorCode   int16
+	ApiVersions []APIVersion
+	// ThrottleTime int32
+	// TagBuffer    types.TaggedFields
 }
 
 type APIVersion struct {
@@ -48,10 +48,10 @@ func (rb *APIVersionsResponseV4) Write(w io.Writer) error {
 		binary.Write(w, binary.BigEndian, apiVersion.ApiKey)
 		binary.Write(w, binary.BigEndian, apiVersion.MinVersion)
 		binary.Write(w, binary.BigEndian, apiVersion.MaxVersion)
-		apiVersion.TagBuffer.WriteTaggedFields(w)
+		// apiVersion.TagBuffer.WriteTaggedFields(w)
 	}
-	binary.Write(w, binary.BigEndian, rb.ThrottleTime)
-	rb.TagBuffer.WriteTaggedFields(w) // TBC (required or not)
+	// binary.Write(w, binary.BigEndian, rb.ThrottleTime)
+	// rb.TagBuffer.WriteTaggedFields(w) // TBC (required or not)
 	return nil
 }
 

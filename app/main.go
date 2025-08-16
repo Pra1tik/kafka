@@ -75,7 +75,7 @@ func handleRequest(conn net.Conn) {
 					MaxVersion: 4,
 				},
 			},
-			ThrottleTime: 0,
+			// ThrottleTime: 0,
 		},
 	}
 
