@@ -1,11 +1,13 @@
 package main
 
 import (
-	"bytes"
-	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"net"
 	"os"
+
+	"github.com/codecrafters-io/kafka-starter-go/internal/request"
+	"github.com/codecrafters-io/kafka-starter-go/internal/response"
 )
 
 func main() {
@@ -38,37 +40,54 @@ func main() {
 // TAG_BUFFER 	COMPACT_ARRAY 	Optional tagged fields
 
 func handleRequest(conn net.Conn) {
-	buffer := make([]byte, 1024)
+	defer conn.Close()
 
-	_, err := conn.Read(buffer)
+	buffer := make([]byte, 1024)
+	n, err := conn.Read(buffer)
 	if err != nil {
 		fmt.Println("Error reading from connection: ", err.Error())
+		return
 	}
 
-	// Prepare payload
-	messageSize := uint32(0)
-	requestApiVersion := binary.BigEndian.Uint16(buffer[6:8])
-	correlationID := binary.BigEndian.Uint32(buffer[8:12])
+	fmt.Printf("Read %d bytes\n", n)
 
-	// fmt.Println(buffer)
-	fmt.Println(requestApiVersion)
-	fmt.Println(correlationID)
-
-	errorCode := uint16(0)
-	if requestApiVersion != 4 {
-		errorCode = 35
-	}
-
-	var buf bytes.Buffer
-	binary.Write(&buf, binary.BigEndian, messageSize)
-	binary.Write(&buf, binary.BigEndian, correlationID)
-	binary.Write(&buf, binary.BigEndian, errorCode)
-
-	fmt.Println(buf.Bytes())
-
-	_, err = conn.Write(buf.Bytes())
+	request, err := request.UnmarshallRequest(buffer[:n])
 	if err != nil {
-		fmt.Println("Error sending payload: ", err.Error())
-		os.Exit(1)
+		fmt.Printf("Error parsing request: %s", err.Error())
+		return
 	}
+	rh := request.Header
+
+	reqJson, _ := json.MarshalIndent(*request, "", " ")
+	fmt.Println("Request json: ", string(reqJson))
+
+	// create response
+	response := response.Response{
+		Header: &response.ResponseHeaderV0{
+			CorrelationId: rh.CorrelationId,
+		},
+		Body: &response.APIVersionsResponseV4{
+			ErrorCode: 0,
+			ApiVersions: []response.APIVersion{
+				{
+					ApiKey:     18,
+					MinVersion: 0,
+					MaxVersion: 4,
+				},
+			},
+			ThrottleTime: 0,
+		},
+	}
+
+	resJson, _ := json.MarshalIndent(response, "", " ")
+	fmt.Println("Response json: ", string(resJson))
+
+	respBytes := response.MarshallResponse()
+	n, err = conn.Write(respBytes)
+	if err != nil {
+		fmt.Println("Error sending response payload: ", err.Error())
+		return
+	}
+
+	fmt.Printf("Sent %d bytes\n", n)
 }
