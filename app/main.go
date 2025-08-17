@@ -62,12 +62,16 @@ func handleRequest(conn net.Conn) {
 	fmt.Println("Request json: ", string(reqJson))
 
 	// create response
+	errorCode := 35
+	if rh.RequestApiVersion >= 0 && rh.RequestApiVersion <= 4 {
+		errorCode = 0
+	}
 	response := response.Response{
 		Header: &response.ResponseHeaderV0{
 			CorrelationId: rh.CorrelationId,
 		},
 		Body: &response.APIVersionsResponseV4{
-			ErrorCode: 0,
+			ErrorCode: int16(errorCode),
 			ApiVersions: []response.APIVersion{
 				{
 					ApiKey:     18,
