@@ -41,57 +41,58 @@ func main() {
 
 func handleRequest(conn net.Conn) {
 	defer conn.Close()
-
 	buffer := make([]byte, 1024)
-	n, err := conn.Read(buffer)
-	if err != nil {
-		fmt.Println("Error reading from connection: ", err.Error())
-		return
-	}
+	for {
+		n, err := conn.Read(buffer)
+		if err != nil {
+			fmt.Println("Error reading from connection: ", err.Error())
+			return
+		}
 
-	fmt.Printf("Read %d bytes\n", n)
+		fmt.Printf("Read %d bytes\n", n)
 
-	request, err := request.UnmarshallRequest(buffer[:n])
-	if err != nil {
-		fmt.Printf("Error parsing request: %s", err.Error())
-		return
-	}
-	rh := request.Header
+		request, err := request.UnmarshallRequest(buffer[:n])
+		if err != nil {
+			fmt.Printf("Error parsing request: %s", err.Error())
+			return
+		}
+		rh := request.Header
 
-	reqJson, _ := json.MarshalIndent(*request, "", " ")
-	fmt.Println("Request json: ", string(reqJson))
+		reqJson, _ := json.MarshalIndent(*request, "", " ")
+		fmt.Println("Request json: ", string(reqJson))
 
-	// create response
-	errorCode := 35
-	if rh.RequestApiVersion >= 0 && rh.RequestApiVersion <= 4 {
-		errorCode = 0
-	}
-	response := response.Response{
-		Header: &response.ResponseHeaderV0{
-			CorrelationId: rh.CorrelationId,
-		},
-		Body: &response.APIVersionsResponseV4{
-			ErrorCode: int16(errorCode),
-			ApiVersions: []response.APIVersion{
-				{
-					ApiKey:     18,
-					MinVersion: 0,
-					MaxVersion: 4,
-				},
+		// create response
+		errorCode := 35
+		if rh.RequestApiVersion >= 0 && rh.RequestApiVersion <= 4 {
+			errorCode = 0
+		}
+		response := response.Response{
+			Header: &response.ResponseHeaderV0{
+				CorrelationId: rh.CorrelationId,
 			},
-			// ThrottleTime: 0,
-		},
+			Body: &response.APIVersionsResponseV4{
+				ErrorCode: int16(errorCode),
+				ApiVersions: []response.APIVersion{
+					{
+						ApiKey:     18,
+						MinVersion: 0,
+						MaxVersion: 4,
+					},
+				},
+				// ThrottleTime: 0,
+			},
+		}
+
+		resJson, _ := json.MarshalIndent(response, "", " ")
+		fmt.Println("Response json: ", string(resJson))
+
+		respBytes := response.MarshallResponse()
+		n, err = conn.Write(respBytes)
+		if err != nil {
+			fmt.Println("Error sending response payload: ", err.Error())
+			return
+		}
+
+		fmt.Printf("Sent %d bytes\n", n)
 	}
-
-	resJson, _ := json.MarshalIndent(response, "", " ")
-	fmt.Println("Response json: ", string(resJson))
-
-	respBytes := response.MarshallResponse()
-	n, err = conn.Write(respBytes)
-	if err != nil {
-		fmt.Println("Error sending response payload: ", err.Error())
-		return
-	}
-
-	fmt.Printf("Sent %d bytes\n", n)
 }
