@@ -78,8 +78,12 @@ func handleRequest(conn net.Conn) {
 						MinVersion: 0,
 						MaxVersion: 4,
 					},
+					{
+						ApiKey:     75,
+						MinVersion: 0,
+						MaxVersion: 0,
+					},
 				},
-				// ThrottleTime: 0,
 			},
 		}
 
