@@ -11,6 +11,7 @@ type NullableString struct {
 	Length int16
 	Data   string
 }
+type CompactString string
 
 type TaggedFields struct {
 	Length uint64
@@ -51,7 +52,7 @@ func ReadNullableString(r *bytes.Reader) (*NullableString, error) {
 }
 
 func (ns *NullableString) WriteNullableString(w io.Writer) error {
-	nsLengthBuf := make([]byte, 2) // nsLenght is int16
+	nsLengthBuf := make([]byte, 2) // nsLength is int16
 	binary.BigEndian.PutUint16(nsLengthBuf, uint16(ns.Length))
 	_, err := w.Write(nsLengthBuf)
 	if err != nil {
@@ -60,6 +61,48 @@ func (ns *NullableString) WriteNullableString(w io.Writer) error {
 
 	_, err = w.Write([]byte(ns.Data))
 	return err
+}
+
+func ReadCompactString(r *bytes.Reader) (*CompactString, error) {
+	var length uint64
+	var err error
+	if length, err = ReadUvarint(r); err != nil {
+		return nil, err
+	}
+
+	var cs CompactString
+	length -= 1
+	if length != 0 {
+		csBytes := make([]byte, length)
+
+		n, err := r.Read(csBytes)
+		if err != nil {
+			return nil, fmt.Errorf("error reading compact string: %s", err)
+		}
+
+		if n != int(length) {
+			return nil, fmt.Errorf("error reading compact string: Expected: %d, Got: %d", length, n)
+		}
+
+		cs = CompactString(csBytes)
+	}
+
+	return &cs, nil
+}
+
+func (cs *CompactString) WriteCompactString(w io.Writer) error {
+	var err error
+	length := len(*cs)
+	if err = WriteUvarint(w, uint64(length+1)); err != nil {
+		return err
+	}
+
+	if length > 0 {
+		_, err = w.Write([]byte(*cs))
+		return err
+	}
+
+	return nil
 }
 
 func ReadTaggedFields(r *bytes.Reader) (*TaggedFields, error) {

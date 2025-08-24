@@ -24,6 +24,38 @@ func (rh *ResponseHeaderV0) Write(w io.Writer) error {
 	return binary.Write(w, binary.BigEndian, rh.CorrelationId)
 }
 
+type ResponseHeaderV1 struct {
+	CorrelationId int32
+	TagBuffer     types.TaggedFields
+}
+
+func (rh *ResponseHeaderV1) Write(w io.Writer) error {
+	if err := binary.Write(w, binary.BigEndian, rh.CorrelationId); err != nil {
+		return err
+	}
+	if err := rh.TagBuffer.WriteTaggedFields(w); err != nil {
+		return err
+	}
+	return nil
+}
+
+type Response struct {
+	MessageSize int32
+	Header      ResponseHeader
+	Body        ResponseBody
+}
+
+func (r Response) MarshallResponse() []byte {
+	buf := bytes.Buffer{}
+	binary.Write(&buf, binary.BigEndian, r.MessageSize)
+	r.Header.Write(&buf)
+	r.Body.Write(&buf)
+	bufBytes := buf.Bytes()
+	binary.BigEndian.PutUint32(bufBytes[0:4], uint32(len(bufBytes)-4))
+	return bufBytes
+}
+
+// API Versions Response
 type APIVersionsResponseV4 struct {
 	ErrorCode    int16
 	ApiVersions  []APIVersion
@@ -53,20 +85,4 @@ func (rb *APIVersionsResponseV4) Write(w io.Writer) error {
 	binary.Write(w, binary.BigEndian, rb.ThrottleTime)
 	rb.TagBuffer.WriteTaggedFields(w)
 	return nil
-}
-
-type Response struct {
-	MessageSize int32
-	Header      ResponseHeader
-	Body        ResponseBody
-}
-
-func (r Response) MarshallResponse() []byte {
-	buf := bytes.Buffer{}
-	binary.Write(&buf, binary.BigEndian, r.MessageSize)
-	r.Header.Write(&buf)
-	r.Body.Write(&buf)
-	bufBytes := buf.Bytes()
-	binary.BigEndian.PutUint32(bufBytes[0:4], uint32(len(bufBytes)-4))
-	return bufBytes
 }

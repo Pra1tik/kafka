@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 
+	constant "github.com/codecrafters-io/kafka-starter-go/internal/constants"
 	"github.com/codecrafters-io/kafka-starter-go/internal/request"
 	"github.com/codecrafters-io/kafka-starter-go/internal/response"
 )
@@ -29,16 +30,6 @@ func main() {
 	}
 }
 
-// message_size
-// Header
-// Body
-
-// request_api_key 	INT16 	The API key for the request
-// request_api_version 	INT16 	The version of the API for the request
-// correlation_id 	INT32 	A unique identifier for the request
-// client_id 	NULLABLE_STRING 	The client ID for the request
-// TAG_BUFFER 	COMPACT_ARRAY 	Optional tagged fields
-
 func handleRequest(conn net.Conn) {
 	defer conn.Close()
 	buffer := make([]byte, 1024)
@@ -51,46 +42,78 @@ func handleRequest(conn net.Conn) {
 
 		fmt.Printf("Read %d bytes\n", n)
 
-		request, err := request.UnmarshallRequest(buffer[:n])
+		req, err := request.UnmarshallRequest(buffer[:n])
 		if err != nil {
 			fmt.Printf("Error parsing request: %s", err.Error())
 			return
 		}
-		rh := request.Header
+		rh, ok := req.Header.(*request.RequestHeaderV2)
+		if !ok {
+			fmt.Printf("Invalid request header type")
+			return
+		}
 
-		reqJson, _ := json.MarshalIndent(*request, "", " ")
+		reqJson, _ := json.MarshalIndent(*req, "", " ")
 		fmt.Println("Request json: ", string(reqJson))
 
 		// create response
-		errorCode := 35
-		if rh.RequestApiVersion >= 0 && rh.RequestApiVersion <= 4 {
-			errorCode = 0
-		}
-		response := response.Response{
-			Header: &response.ResponseHeaderV0{
-				CorrelationId: rh.CorrelationId,
-			},
-			Body: &response.APIVersionsResponseV4{
-				ErrorCode: int16(errorCode),
-				ApiVersions: []response.APIVersion{
-					{
-						ApiKey:     18,
-						MinVersion: 0,
-						MaxVersion: 4,
-					},
-					{
-						ApiKey:     75,
-						MinVersion: 0,
-						MaxVersion: 0,
+		var res response.Response
+		switch rh.RequestApiKey {
+		case constant.ApiVersions:
+			errorCode := constant.UNSUPPORTED_VERSION
+			if rh.RequestApiVersion >= 0 && rh.RequestApiVersion <= 4 {
+				errorCode = 0
+			}
+			res = response.Response{
+				Header: &response.ResponseHeaderV0{
+					CorrelationId: rh.CorrelationId,
+				},
+				Body: &response.APIVersionsResponseV4{
+					ErrorCode: errorCode,
+					ApiVersions: []response.APIVersion{
+						{
+							ApiKey:     constant.ApiVersions,
+							MinVersion: 0,
+							MaxVersion: 4,
+						},
+						{
+							ApiKey:     constant.DescribeTopicPartitions,
+							MinVersion: 0,
+							MaxVersion: 0,
+						},
 					},
 				},
-			},
+			}
+		case constant.DescribeTopicPartitions:
+			rb, ok := req.Body.(*request.DescribeTopicPartitionsV0)
+			if !ok {
+				fmt.Printf("Invalid request body type")
+				return
+			}
+			topics := make([]response.Topic, len(rb.Topics))
+			for i, topic := range rb.Topics {
+				topics[i].ErrorCode = constant.UNKNOWN_TOPIC_OR_PARTITION
+				topics[i].TopicName = topic.Name
+				topics[i].TopicId = [16]byte{}
+			}
+
+			res = response.Response{
+				Header: &response.ResponseHeaderV1{
+					CorrelationId: rh.CorrelationId,
+				},
+				Body: &response.DescribeTopicPartitionsV0{
+					Topics: topics,
+					NextCursor: response.Cursor{
+						TopicName: "first topic",
+					},
+				},
+			}
 		}
 
-		resJson, _ := json.MarshalIndent(response, "", " ")
+		resJson, _ := json.MarshalIndent(res, "", " ")
 		fmt.Println("Response json: ", string(resJson))
 
-		respBytes := response.MarshallResponse()
+		respBytes := res.MarshallResponse()
 		n, err = conn.Write(respBytes)
 		if err != nil {
 			fmt.Println("Error sending response payload: ", err.Error())
